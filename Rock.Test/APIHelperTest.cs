@@ -2,7 +2,7 @@
 
 namespace Rock.Test
 {
-    public class Class1
+    public class APIHelperTest
     {
 
     }
