@@ -3,6 +3,8 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.SqlClient;
+using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace Rock.Library.Helper
@@ -123,9 +125,9 @@ namespace Rock.Library.Helper
                 return false;
             }
 
-        }
+        } 
         #endregion
-
+         
         #region 执行SQL查询
         public static DataSet ExecuteSQLDataSet(string dbConnect, string sql)
         {
@@ -160,6 +162,223 @@ namespace Rock.Library.Helper
         }
         #endregion
 
+        #region 事务执行SQL
+        /// <summary>
+        /// 事务执行SQL
+        /// </summary>
+        public int ExecuteSql(string connectionString, params SqlEntity[] sqlItems)
+        {
+            using (SqlConnection sqlConnection = new SqlConnection(connectionString))
+            {
+                if (sqlConnection.State == ConnectionState.Closed)
+                {
+                    sqlConnection.Open();
+                }
+                using (SqlTransaction sqlTransaction = sqlConnection.BeginTransaction(IsolationLevel.ReadCommitted))
+                {
+                    SqlCommand sqlCommand = new SqlCommand();
+                    sqlCommand.CommandTimeout = 0;
+                    int executeCount = 0;
+                    try
+                    {
+                        sqlCommand.Connection = sqlConnection;
+                        sqlCommand.Transaction = sqlTransaction;
+                        foreach (var item in sqlItems)
+                        {
+                            if (item == null) continue;
+                            if (item.IsBatch)
+                            {
+                                executeCount += ExecuteSqlBulkCopy(sqlConnection, item.SourseData, item.TableName, sqlTransaction);
+                            }
+                            else
+                            {
+                                sqlCommand.CommandText = item.SqlValue;
+                                AddParams(sqlCommand, item.CustomType, item.Params);
+                                int cnt = sqlCommand.ExecuteNonQuery();
+                                executeCount += cnt;
+                                sqlCommand.Parameters.Clear();
+                            }
+                        }
+                        sqlTransaction.Commit();
+                    }
+                    catch (Exception)
+                    {
+                        sqlTransaction.Rollback();
+                        executeCount = -1;
+                    }
+                    sqlCommand.Dispose();
+                    sqlTransaction.Dispose();
+                    sqlConnection.Dispose();
+                    return executeCount;
+                }
+            }
+        }
+        /// <summary>
+        /// SQL执行事务 
+        /// </summary>
+        private int ExecuteSqlBulkCopy(SqlConnection conn, DataTable sourceData, String tableName, SqlTransaction sqlTransaction)
+        {
+            if (sourceData != null && sourceData.Rows.Count > 0)
+            {
+                int count = sourceData.Rows.Count;
+                using (SqlBulkCopy sbc = new SqlBulkCopy(conn, SqlBulkCopyOptions.Default, sqlTransaction))
+                {
+                    sbc.DestinationTableName = tableName;
+                    sbc.BatchSize = 500000;
+                    sbc.BulkCopyTimeout = 500000;
+                    for (int i = 0; i < sourceData.Columns.Count; i++)
+                    {
+                        sbc.ColumnMappings.Add(sourceData.Columns[i].ColumnName, sourceData.Columns[i].ColumnName);
+                    }
+                    sbc.WriteToServer(sourceData);
+                    sourceData.Dispose();
+                    return count;
+                }
+            }
+            return 0;
+        }
+        /// <summary>
+        /// 添加参数
+        /// </summary>
+        private void AddParams(SqlCommand cmd, String customType, params IDataParameter[] sqlParams)
+        {
+            if (sqlParams != null)
+            {
+                foreach (SqlParameter parameter in sqlParams)
+                {
+                    if (!string.IsNullOrEmpty(customType))
+                    {
+                        parameter.SqlDbType = SqlDbType.Structured;
+                        parameter.TypeName = customType;
+                    }
+                    if ((parameter.Direction == ParameterDirection.InputOutput || parameter.Direction == ParameterDirection.Input) && (parameter.Value == null))
+                    {
+                        parameter.Value = DBNull.Value;
+                    }
 
+                    cmd.Parameters.Add(parameter);
+                }
+            }
+        }
+
+        #endregion
+
+        #region 获取SQL语句
+
+        #region 获取插入语句（批量）
+        /// <summary>
+        /// 获取插入语句（批量）
+        /// </summary>
+        public List<SqlEntity> InsertSqlItemsList<T>(List<T> source, string tableName = "") where T : class, new()
+        {
+            List<SqlEntity> list = new List<SqlEntity>();
+            foreach (var s in source)
+            {
+                list.Add(InsertSqlItem(s, tableName));
+            }
+            return list;
+        }
+        #endregion
+
+        #region 获取插入语句
+
+        /// <summary>
+        /// 获取插入语句
+        /// </summary>
+        public SqlEntity InsertSqlItem<T>(T t, string tableName = "") where T : class, new()
+        {
+            try
+            {
+                StringBuilder stringBuilder = new StringBuilder();
+                var properties = typeof(T).GetProperties().Where(p => p.GetMethod.IsVirtual == false && p.PropertyType != typeof(byte[]));
+                stringBuilder.AppendFormat("INSERT INTO [{0}]", string.IsNullOrEmpty(tableName) ? typeof(T).Name : tableName);
+                stringBuilder.AppendFormat("({0})", string.Join(",", properties.Select(p => p.Name)));
+                stringBuilder.AppendFormat("VALUES({0})", string.Join(",", properties.Select(q => "@" + q.Name)));
+                return new SqlEntity { SqlValue = stringBuilder.ToString(), Params = properties.Select(p => new SqlParameter("@" + p.Name, p.GetValue(t))).ToArray() };
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        #endregion
+
+        #region 获取更新语句（批量）
+        /// <summary>
+        /// 获取更新语句（批量）
+        /// </summary>
+        public List<SqlEntity> UpdateSqlItemsList<T>(List<T> source, string tableName = "") where T : class, new()
+        {
+            List<SqlEntity> list = new List<SqlEntity>();
+            foreach (var s in source)
+            {
+                list.Add(UpdateSqlItem(s, tableName));
+            }
+            return list;
+        }
+        #endregion
+
+        #region 获取更新语句
+        /// <summary>
+        /// 获取更新语句
+        /// </summary>
+        public SqlEntity UpdateSqlItem<T>(T t, string tableName = "") where T : class, new()
+        {
+            try
+            {
+                StringBuilder stringBuilder = new StringBuilder();
+                var properties = typeof(T).GetProperties().Where(p => p.GetMethod.IsVirtual == false && p.PropertyType != typeof(byte[]));
+                stringBuilder.AppendFormat("UPDATE [{0}] ", string.IsNullOrEmpty(tableName) ? typeof(T).Name : tableName);
+
+                stringBuilder.AppendFormat("SET {0} ", string.Join(",", properties.Select(p => p.Name + "=@" + p.Name)));
+                stringBuilder.AppendFormat("WHERE Id=@Id ");
+                return new SqlEntity { SqlValue = stringBuilder.ToString(), Params = properties.Select(p => new SqlParameter("@" + p.Name, p.GetValue(t))).ToArray() };
+            }
+            catch
+            {
+                return null;
+            }
+        }
+        #endregion
+
+        #region 获取删除语句（批量）
+        /// <summary>
+        /// 获取删除语句（批量）
+        /// </summary>
+        public List<SqlEntity> DeleteSqlItemList<T>(List<T> source, string tableName = "") where T : class, new()
+        {
+            List<SqlEntity> list = new List<SqlEntity>();
+            foreach (var s in source)
+            {
+                list.Add(DeleteSqlItem(s, tableName));
+            }
+            return list;
+        }
+        #endregion
+
+        #region 获取删除语句
+        /// <summary>
+        /// 获取删除语句
+        /// </summary>
+        public SqlEntity DeleteSqlItem<T>(T t, string tableName = "") where T : class, new()
+        {
+            try
+            {
+                StringBuilder stringBuilder = new StringBuilder();
+                var properties = typeof(T).GetProperties().Where(p => p.GetMethod.IsVirtual == false && p.PropertyType != typeof(byte[]));
+                if (properties.Where(p => p.Name.ToLower() == "id") == null) return null;
+                stringBuilder.AppendFormat("DELETE FROM [{0}] ", string.IsNullOrEmpty(tableName) ? typeof(T).Name : tableName);
+                stringBuilder.AppendFormat(" WHERE Id= @Id");
+                return new SqlEntity { SqlValue = stringBuilder.ToString(), Params = properties.Where(p => p.Name.ToLower() == "id").Select(p => new SqlParameter("@Id", p.GetValue(t))).ToArray() };
+            }
+            catch
+            {
+                return null;
+            }
+        }
+        #endregion
+
+        #endregion
     }
 }

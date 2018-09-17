@@ -116,6 +116,7 @@
     <Compile Include="Model\DataBaseStruct.cs" />
     <Compile Include="Model\GuidType.cs" />
     <Compile Include="Model\MethodType.cs" />
+    <Compile Include="Model\SqlEntity.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Utils.cs" />
   </ItemGroup>
