@@ -44,14 +44,14 @@ namespace Rock.Work.Office
                     {
                         string name = prop.Name; //属性名称  
                         object value = prop.GetValue(mod, null);  //属性值  
-                        string des = ((DescriptionAttribute)Attribute.GetCustomAttribute(prop, typeof(DescriptionAttribute))).Description;// 属性描述值
+                        //string des = ((DescriptionAttribute)Attribute.GetCustomAttribute(prop, typeof(DescriptionAttribute))).Description;// 属性描述值
 
                         //注意：文本域名称 == 模型中属性的 Description 值 ！！！！！！
                         //也可以： 文本域名称 == 模型中属性的 Name 值 ！！！！！！
-                        if (field.Name == des)
+                        if (field.Name == name)
                         {
                             if (field.DocumentObjectType == DocumentObjectType.TextFormField)   //文本域
-                            {
+                            { 
                                 if (prop.PropertyType.Name == "Boolean")
                                 {
                                     field.Text = "√";   //插入勾选符号
