@@ -20,8 +20,10 @@ namespace Rock.Work
 
         private void btnChangeId_Click(object sender, EventArgs e)
         {
+            this.btnChangeId.Enabled = false;
             AccountHelper.OldUserIdToNew();
             MessageBox.Show("转换完成！");
+            this.btnChangeId.Enabled = true;
         }
     }
 }

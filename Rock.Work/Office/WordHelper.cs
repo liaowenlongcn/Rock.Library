@@ -4,8 +4,11 @@ using Spire.Doc.Fields;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Data;
+using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -13,65 +16,48 @@ namespace Rock.Work.Office
 {
     public class WordHelper
     {
-        public static bool ExportWordByTemplete<T>(T mod, string templeteFilePath, string expFilePath)
+        public static bool ExportWordByTemplete<T>(T model, string templeteFilePath, string targetFilePath)
         {
-            if (mod == null)
-            {
-                throw new Exception("模型为空！");
-            }
-
-            System.Reflection.PropertyInfo[] properties = mod.GetType().GetProperties(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
-            if (properties.Length <= 0)
-            {
-                throw new Exception("模型属性为空！");
-            }
-
-            if (!File.Exists(templeteFilePath))
-            {
-                throw new Exception("指定路径的模板文件不存在！");
-            }
-
             try
             {
                 Document doc = new Document();
-                doc.LoadFromFile(templeteFilePath);  
-                doc.Properties.FormFieldShading = false;
+                doc.LoadFromFile(templeteFilePath);
+                BookmarksNavigator bookmarkNavigator = new BookmarksNavigator(doc);
+                var bookmarks = doc.Bookmarks;
 
-                //遍历Word模板中的文本域（field.name为文本域名称）
-                foreach (FormField field in doc.Sections[0].Body.FormFields)
+                while (bookmarks.Count > 0)
                 {
-                    foreach (System.Reflection.PropertyInfo prop in properties)
+                    var bookmark = bookmarks[0];
+                    bookmarkNavigator.MoveToBookmark(bookmark.Name, true, true);    //移动到书签并清空书签原有内容
+                    bookmarkNavigator.DeleteBookmarkContent(true);
+
+                    var paras = bookmark.Name.Split('_');
+                    if (paras.Length < 3)
                     {
-                        string name = prop.Name; //属性名称  
-                        object value = prop.GetValue(mod, null);  //属性值  
-                        //string des = ((DescriptionAttribute)Attribute.GetCustomAttribute(prop, typeof(DescriptionAttribute))).Description;// 属性描述值
-
-                        //注意：文本域名称 == 模型中属性的 Description 值 ！！！！！！
-                        //也可以： 文本域名称 == 模型中属性的 Name 值 ！！！！！！
-                        if (field.Name == name)
-                        {
-                            if (field.DocumentObjectType == DocumentObjectType.TextFormField)   //文本域
-                            { 
-                                if (prop.PropertyType.Name == "Boolean")
-                                {
-                                    field.Text = "√";   //插入勾选符号
-                                    break;
-                                }
-                                else
-                                {
-                                    field.Text = value.ToString();   //向Word模板中插入值
-                                    break;
-                                }
-                            }
-                            else if (field.DocumentObjectType == DocumentObjectType.CheckBox)   //复选框
-                            {
-                                (field as CheckBoxFormField).Checked = (value as bool?).HasValue ? (value as bool?).Value : false;
-                            }
-                        }
+                        doc.Bookmarks.Remove(bookmark);
+                        continue;
                     }
-                }
+                    var type = paras[0].ToLower();
+                    var name = paras[1].ToLower();
+                    var num = paras[2].ToLower();
 
-                doc.SaveToFile(expFilePath, FileFormat.Docx);
+                    switch (type)
+                    {
+                        case "table":
+                            var dataTable = GetModelValue(name, model);
+                            bookmarkNavigator.InsertTable(GetTable(doc, (DataTable)dataTable));
+                            break;
+                        default:
+                            var text = GetModelValue(name, model);
+                            if (text != null)
+                                bookmarkNavigator.InsertText(text.ToString());
+                            break;
+                    }
+
+                    doc.Bookmarks.Remove(bookmark);
+                }
+                doc.Properties.FormFieldShading = false;
+                doc.SaveToFile(targetFilePath, FileFormat.Docx);
                 doc.Close();
 
                 return true;
@@ -79,9 +65,66 @@ namespace Rock.Work.Office
             catch (Exception ex)
             {
                 string msg = ex.Message;
-
                 return false;
             }
         }
-    } 
+
+        private static object GetModelValue(string fieldName, object model)
+        {
+            try
+            {
+                Type type = model.GetType();
+                object value = type.GetProperty(fieldName).GetValue(model, null);
+                return value;
+            }
+            catch (Exception ex)
+            {
+                return null;
+            }
+        }
+
+        private static Table GetTable(Document doc, DataTable dataTable)
+        {
+            var columnsCount = dataTable.Columns.Count;
+            var rowsCount = dataTable.Rows.Count;
+
+            Table table = new Table(doc);
+            table.ResetCells(rowsCount, columnsCount);
+            table.TableFormat.Borders.BorderType = BorderStyle.Hairline;
+            table.TableFormat.Borders.Color = Color.Gray;
+
+
+            // ***************** DataTable Header *************************
+            TableRow row = table.Rows[0];
+            row.IsHeader = true;
+            row.Height = 20;
+            row.HeightType = TableRowHeightType.Exactly;
+            row.RowFormat.BackColor = Color.LightGray;
+            for (int columnIndex = 0; columnIndex < columnsCount; columnIndex++)
+            {
+                row.Cells[columnIndex].CellFormat.VerticalAlignment = VerticalAlignment.Middle;
+                Paragraph p = row.Cells[columnIndex].AddParagraph();
+                p.Format.HorizontalAlignment = HorizontalAlignment.Center;
+                TextRange txtRange = p.AppendText(dataTable.Rows[0][columnIndex].ToString());
+                txtRange.CharacterFormat.Bold = true;
+            }
+
+            // ***************** DataTable Data *************************
+            for (int rowIndex = 1; rowIndex < rowsCount; rowIndex++)
+            {
+                TableRow dataRow = table.Rows[rowIndex];
+                dataRow.Height = 20;
+                dataRow.HeightType = TableRowHeightType.Exactly;
+                dataRow.RowFormat.BackColor = Color.Empty;
+                for (int columnIndex = 0; columnIndex < columnsCount; columnIndex++)
+                {
+                    dataRow.Cells[columnIndex].CellFormat.VerticalAlignment = VerticalAlignment.Middle;
+                    dataRow.Cells[columnIndex].AddParagraph().AppendText(dataTable.Rows[rowIndex][columnIndex].ToString());
+                }
+            }
+
+
+            return table;
+        }
+    }
 }
