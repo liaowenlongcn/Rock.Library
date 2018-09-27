@@ -92,30 +92,30 @@ namespace Rock.Work.Office
             table.ResetCells(rowsCount, columnsCount);
             table.TableFormat.Borders.BorderType = BorderStyle.Hairline;
             table.TableFormat.Borders.Color = Color.Gray;
-
+            table.TableFormat.IsAutoResized = true;
+            table.TableFormat.WrapTextAround = true;  
 
             // ***************** DataTable Header *************************
             TableRow row = table.Rows[0];
-            row.IsHeader = true;
-            row.Height = 20;
+            row.IsHeader = true; 
             row.HeightType = TableRowHeightType.Exactly;
             row.RowFormat.BackColor = Color.LightGray;
             for (int columnIndex = 0; columnIndex < columnsCount; columnIndex++)
             {
                 row.Cells[columnIndex].CellFormat.VerticalAlignment = VerticalAlignment.Middle;
+                row.Cells[columnIndex].CellFormat.TextWrap = true; 
                 Paragraph p = row.Cells[columnIndex].AddParagraph();
-                p.Format.HorizontalAlignment = HorizontalAlignment.Center;
+                p.Format.HorizontalAlignment = HorizontalAlignment.Center;                
                 TextRange txtRange = p.AppendText(dataTable.Rows[0][columnIndex].ToString());
-                txtRange.CharacterFormat.Bold = true;
+                txtRange.CharacterFormat.Bold = true; 
             }
 
             // ***************** DataTable Data *************************
             for (int rowIndex = 1; rowIndex < rowsCount; rowIndex++)
             {
-                TableRow dataRow = table.Rows[rowIndex];
-                dataRow.Height = 20;
+                TableRow dataRow = table.Rows[rowIndex]; 
                 dataRow.HeightType = TableRowHeightType.Exactly;
-                dataRow.RowFormat.BackColor = Color.Empty;
+                dataRow.RowFormat.BackColor = Color.Empty; 
                 for (int columnIndex = 0; columnIndex < columnsCount; columnIndex++)
                 {
                     dataRow.Cells[columnIndex].CellFormat.VerticalAlignment = VerticalAlignment.Middle;

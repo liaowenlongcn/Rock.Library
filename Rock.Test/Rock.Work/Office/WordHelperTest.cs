@@ -38,13 +38,13 @@ namespace Rock.Test.Rock.Work.Office
 
             DataRow dr1 = dt.NewRow();
             dr1["time"] = "2017-09-08";
-            dr1["company"] = "百度";
+            dr1["company"] = "百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度百度";
             dr1["position"] = "程序员";
             dt.Rows.Add(dr1);
 
             DataRow dr2 = dt.NewRow();
             dr2["time"] = "2018-05-18";
-            dr2["company"] = "腾讯";
+            dr2["company"] = "腾讯腾讯腾讯腾讯腾讯腾讯腾讯腾讯腾讯腾讯腾讯腾讯腾讯腾讯腾讯腾讯腾讯腾讯腾讯腾讯腾讯腾讯腾讯腾讯腾讯腾讯腾讯腾讯腾讯腾讯腾讯腾讯腾讯腾讯腾讯腾讯腾讯腾讯腾讯";
             dr2["position"] = "软件工程师";
 
             dt.Rows.Add(dr2);
