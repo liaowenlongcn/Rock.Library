@@ -28,7 +28,7 @@ namespace Rock.Work.EDC
             string data = bo.ToJson();
             Dictionary<string, object> headers = new Dictionary<string, object>();
             headers.Add("ApiHeader", "{\"SessionKey\":\"\",\"LangKey\":\"chs\",\"Ip\":\"\",\"AppKey\":\"U27BM34YCZWPWAG\"}");
-            HttpHelper.Post(url,data,headers);
+            HttpHelper.Post(url,data,headers); 
         }
 
         public class RequestBO {
